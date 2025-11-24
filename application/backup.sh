@@ -121,7 +121,7 @@ fi
 
 # Upload compressed backup file to S3
 start=$(date +%s);
-s3cmd put /tmp/${DB_NAME}.sql.gz ${S3_BUCKET} || STATUS=$?;
+aws s3 cp "/tmp/${DB_NAME}.sql.gz" "s3://${S3_BUCKET}/${DB_NAME}.sql.gz" || STATUS=$?
 if [ $STATUS -ne 0 ]; then
     error_message="${MYNAME}: FATAL: Copy backup to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
     log "ERROR" "${error_message}";
@@ -130,7 +130,7 @@ if [ $STATUS -ne 0 ]; then
 fi
 
 # Upload checksum file
-s3cmd put /tmp/${DB_NAME}.sql.sha256.gz ${S3_BUCKET} || STATUS=$?;
+aws s3 cp "/tmp/${DB_NAME}.sql.sha256.gz" "s3://${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" || STATUS=$?;
 end=$(date +%s);
 if [ $STATUS -ne 0 ]; then
     error_message="${MYNAME}: FATAL: Copy checksum to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS).";
@@ -144,12 +144,10 @@ fi
 # Backblaze B2 Upload
 if [ "${B2_BUCKET}" != "" ]; then
     start=$(date +%s);
-    s3cmd \
-    --access_key=${B2_APPLICATION_KEY_ID} \
-    --secret_key=${B2_APPLICATION_KEY} \
-    --host=${B2_HOST} \
-    --host-bucket='%(bucket)s.'"${B2_HOST}" \
-    put /tmp/${DB_NAME}.sql.gz s3://${B2_BUCKET}/${DB_NAME}.sql.gz;
+    AWS_ACCESS_KEY_ID="${B2_APPLICATION_KEY_ID}" \
+    AWS_SECRET_ACCESS_KEY="${B2_APPLICATION_KEY}" \
+    aws s3 cp "/tmp/${DB_NAME}.sql.gz" "s3://${B2_BUCKET}/${DB_NAME}.sql.gz" \
+      --endpoint-url "https://${B2_HOST}"
     STATUS=$?;
     end=$(date +%s);
     if [ $STATUS -ne 0 ]; then
