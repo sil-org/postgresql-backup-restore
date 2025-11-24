@@ -10,7 +10,7 @@ log() {
 # Function to remove sensitive values from sentry Event
 filter_sensitive_values() {
     local msg="$1"
-    for var in AWS_ACCESS_KEY AWS_SECRET_KEY B2_APPLICATION_KEY B2_APPLICATION_KEY_ID DB_ROOTPASSWORD DB_USERPASSWORD; do
+    for var in AWS_ACCESS_KEY AWS_SECRET_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY B2_APPLICATION_KEY B2_APPLICATION_KEY_ID DB_ROOTPASSWORD DB_USERPASSWORD; do
         val="${!var}"
         if [ -n "$val" ]; then
             msg="${msg//$val/[FILTERED]}"
@@ -62,6 +62,10 @@ log "INFO" "${MYNAME}: Backing up ${DB_NAME}";
 start=$(date +%s);
 $(PGPASSWORD=${DB_USERPASSWORD} pg_dump --host=${DB_HOST} --username=${DB_USER} --create --clean ${DB_OPTIONS} --dbname=${DB_NAME} > /tmp/${DB_NAME}.sql) || STATUS=$?;
 end=$(date +%s);
+
+# maintain backward compatibility with key variables accepted by s3cmd
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-$AWS_ACCESS_KEY}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-$AWS_SECRET_KEY}"
 
 if [ $STATUS -ne 0 ]; then
     error_message="${MYNAME}: FATAL: Backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";

@@ -9,7 +9,7 @@ log() {
 
 filter_sensitive_values() {
     local msg="$1"
-    for var in AWS_ACCESS_KEY AWS_SECRET_KEY B2_APPLICATION_KEY B2_APPLICATION_KEY_ID DB_ROOTPASSWORD DB_USERPASSWORD; do
+    for var in AWS_ACCESS_KEY AWS_SECRET_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY B2_APPLICATION_KEY B2_APPLICATION_KEY_ID DB_ROOTPASSWORD DB_USERPASSWORD; do
         val="${!var}"
         if [ -n "$val" ]; then
             msg="${msg//$val/[FILTERED]}"
@@ -93,6 +93,10 @@ fi
 # Download the backup and checksum files
 log "INFO" "${MYNAME}: copying database ${DB_NAME} backup and checksum from ${S3_BUCKET}"
 start=$(date +%s)
+
+# maintain backward compatibility with key variables accepted by s3cmd
+export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-$AWS_ACCESS_KEY}"
+export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-$AWS_SECRET_KEY}"
 
 # Download database backup
 aws s3 cp "${S3_BUCKET}/${DB_NAME}.sql.gz" "/tmp/${DB_NAME}.sql.gz" || STATUS=$?
