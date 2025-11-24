@@ -121,7 +121,7 @@ fi
 
 # Upload compressed backup file to S3
 start=$(date +%s);
-aws s3 cp "/tmp/${DB_NAME}.sql.gz" "s3://${S3_BUCKET}/${DB_NAME}.sql.gz" || STATUS=$?
+aws s3 cp "/tmp/${DB_NAME}.sql.gz" "${S3_BUCKET}/${DB_NAME}.sql.gz" || STATUS=$?
 if [ $STATUS -ne 0 ]; then
     error_message="${MYNAME}: FATAL: Copy backup to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
     log "ERROR" "${error_message}";
@@ -130,7 +130,7 @@ if [ $STATUS -ne 0 ]; then
 fi
 
 # Upload checksum file
-aws s3 cp "/tmp/${DB_NAME}.sql.sha256.gz" "s3://${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" || STATUS=$?;
+aws s3 cp "/tmp/${DB_NAME}.sql.sha256.gz" "${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" || STATUS=$?;
 end=$(date +%s);
 if [ $STATUS -ne 0 ]; then
     error_message="${MYNAME}: FATAL: Copy checksum to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS).";
