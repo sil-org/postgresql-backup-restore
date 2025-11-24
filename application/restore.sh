@@ -95,7 +95,7 @@ log "INFO" "${MYNAME}: copying database ${DB_NAME} backup and checksum from ${S3
 start=$(date +%s)
 
 # Download database backup
-aws s3 cp s3://${S3_BUCKET}/${DB_NAME}.sql.gz /tmp/${DB_NAME}.sql.gz || STATUS=$?
+aws s3 cp "${S3_BUCKET}/${DB_NAME}.sql.gz" "/tmp/${DB_NAME}.sql.gz" || STATUS=$?
 if [ $STATUS -ne 0 ]; then
     error_message="${MYNAME}: FATAL: Copy backup of ${DB_NAME} from ${S3_BUCKET} returned non-zero status ($STATUS) in $(expr $(date +%s) - ${start}) seconds."
     log "ERROR" "${error_message}"
@@ -104,7 +104,7 @@ if [ $STATUS -ne 0 ]; then
 fi
 
 # Download checksum file
-aws s3 cp s3://${S3_BUCKET}/${DB_NAME}.sql.sha256.gz /tmp/${DB_NAME}.sql.sha256.gz || STATUS=$?
+aws s3 cp "${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" "/tmp/${DB_NAME}.sql.sha256.gz" || STATUS=$?
 end=$(date +%s)
 if [ $STATUS -ne 0 ]; then
     error_message="${MYNAME}: FATAL: Copy checksum of ${DB_NAME} from ${S3_BUCKET} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
