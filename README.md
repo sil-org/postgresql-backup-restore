@@ -24,9 +24,13 @@ Service to backup and/or restore a PostgreSQL database to/from S3
 
 `DB_USER` user that accesses the database (PostgreSQL "role")
 
-`AWS_ACCESS_KEY` used for S3 interactions
+`AWS_ACCESS_KEY_ID` used for S3 interactions
 
-`AWS_SECRET_KEY` used for S3 interactions
+`AWS_SECRET_ACCESS_KEY` used for S3 interactions
+
+`AWS_ACCESS_KEY` used for S3 interactions (Deprecated)
+
+`AWS_SECRET_KEY` used for S3 interactions (Deprecated)
 
 `S3_BUCKET` e.g., _s3://database-backups_ **NOTE: no trailing slash**
 
