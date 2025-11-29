@@ -4,7 +4,7 @@
 log() {
     local level="$1";
     local message="$2";
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${level}: ${message}";
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${level}: ${MYNAME}: ${message}";
 }
 
 # Function to remove sensitive values from sentry Event
@@ -41,7 +41,7 @@ error_to_sentry() {
 
     # Attempt to send event to Sentry
     if sentry-cli send-event \
-        --message "${error_message}" \
+        --message "${MYNAME}: ${error_message}" \
         --level error \
         --tag "database:${db_name}" \
         --tag "status:${status_code}"; then
@@ -56,8 +56,8 @@ error_to_sentry() {
 MYNAME="postgresql-backup-restore";
 STATUS=0;
 
-log "INFO" "${MYNAME}: backup: Started";
-log "INFO" "${MYNAME}: Backing up ${DB_NAME}";
+log "INFO" "backup: Started";
+log "INFO" "Backing up ${DB_NAME}";
 
 start=$(date +%s);
 $(PGPASSWORD=${DB_USERPASSWORD} pg_dump --host=${DB_HOST} --username=${DB_USER} --create --clean ${DB_OPTIONS} --dbname=${DB_NAME} > /tmp/${DB_NAME}.sql) || STATUS=$?;
@@ -68,17 +68,17 @@ export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-$AWS_ACCESS_KEY}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-$AWS_SECRET_KEY}"
 
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
+    error_message="FATAL: Backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
     exit $STATUS;
 else
-    log "INFO" "${MYNAME}: Backup of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds, ($(stat -c %s /tmp/${DB_NAME}.sql) bytes).";
+    log "INFO" "Backup of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds, ($(stat -c %s /tmp/${DB_NAME}.sql) bytes).";
 fi
 
 log "INFO" "Generating checksum for backup file"
 cd /tmp || {
-    error_message="${MYNAME}: FATAL: Failed to change directory to /tmp";
+    error_message="FATAL: Failed to change directory to /tmp";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "1";
     exit 1;
@@ -86,7 +86,7 @@ cd /tmp || {
 
 # Create checksum file format
 sha256sum "${DB_NAME}.sql" > "${DB_NAME}.sql.sha256" || {
-    error_message="${MYNAME}: FATAL: Failed to generate checksum for backup of ${DB_NAME}";
+    error_message="FATAL: Failed to generate checksum for backup of ${DB_NAME}";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "1";
     exit 1;
@@ -94,14 +94,14 @@ sha256sum "${DB_NAME}.sql" > "${DB_NAME}.sql.sha256" || {
 log "DEBUG" "Checksum file contents: $(cat "${DB_NAME}.sql.sha256")";
 
 # Validate checksum
-log "INFO" "${MYNAME}: Validating backup checksum";
-sha256sum -c "${DB_NAME}.sql.sha256" || {
-    error_message="${MYNAME}: FATAL: Checksum validation failed for backup of ${DB_NAME}";
+log "INFO" "Validating backup checksum";
+sha256sum --check --quiet "${DB_NAME}.sql.sha256" || {
+    error_message="FATAL: Checksum validation failed for backup of ${DB_NAME}";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "1";
     exit 1;
 }
-log "INFO" "${MYNAME}: Checksum validation successful";
+log "INFO" "Checksum validation successful";
 
 # Compression
 start=$(date +%s);
@@ -109,40 +109,40 @@ gzip -f /tmp/${DB_NAME}.sql || STATUS=$?;
 end=$(date +%s);
 
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Compressing backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
+    error_message="FATAL: Compressing backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
     exit $STATUS;
 else
-    log "INFO" "${MYNAME}: Compressing backup of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
+    log "INFO" "Compressing backup of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
 fi
 
 # Compress checksum file
 gzip -f "${DB_NAME}.sql.sha256";
 if [ $? -ne 0 ]; then
-    log "WARN" "${MYNAME}: Failed to compress checksum file, but continuing backup process";
+    log "WARN" "Failed to compress checksum file, but continuing backup process";
 fi
 
 # Upload compressed backup file to S3
 start=$(date +%s);
-aws s3 cp "/tmp/${DB_NAME}.sql.gz" "${S3_BUCKET}/${DB_NAME}.sql.gz" || STATUS=$?
+aws s3 cp --quiet "/tmp/${DB_NAME}.sql.gz" "${S3_BUCKET}/${DB_NAME}.sql.gz" || STATUS=$?
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Copy backup to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
+    error_message="FATAL: Copy backup to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
     exit $STATUS;
 fi
 
 # Upload checksum file
-aws s3 cp "/tmp/${DB_NAME}.sql.sha256.gz" "${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" || STATUS=$?;
+aws s3 cp --quiet "/tmp/${DB_NAME}.sql.sha256.gz" "${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" || STATUS=$?;
 end=$(date +%s);
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Copy checksum to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS).";
+    error_message="FATAL: Copy checksum to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS).";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
     exit $STATUS;
 else
-    log "INFO" "${MYNAME}: Copy backup and checksum to ${S3_BUCKET} of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
+    log "INFO" "Copy backup and checksum to ${S3_BUCKET} of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
 fi
 
 # Backblaze B2 Upload
@@ -155,20 +155,18 @@ if [ "${B2_BUCKET}" != "" ]; then
     STATUS=$?;
     end=$(date +%s);
     if [ $STATUS -ne 0 ]; then
-        error_message="${MYNAME}: FATAL: Copy backup to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
+        error_message="FATAL: Copy backup to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
         log "ERROR" "${error_message}";
         error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
         exit $STATUS;
     else
-        log "INFO" "${MYNAME}: Copy backup to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
+        log "INFO" "Copy backup to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
     fi
 fi
-
-echo "postgresql-backup-restore: backup: Completed";
 
 # Clean up temporary files
 rm -f "/tmp/${DB_NAME}.sql.gz" "/tmp/${DB_NAME}.sql.sha256.gz";
 
-log "INFO" "${MYNAME}: backup: Completed";
+log "INFO" "backup: Completed";
 
 exit $STATUS;

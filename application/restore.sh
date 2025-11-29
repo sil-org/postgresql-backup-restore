@@ -4,7 +4,7 @@
 log() {
     local level="$1"
     local message="$2"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${level}: ${message}"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${level}: ${MYNAME}: ${message}"
 }
 
 filter_sensitive_values() {
@@ -55,43 +55,43 @@ error_to_sentry() {
 
 MYNAME="postgresql-backup-restore"
 STATUS=0
-log "INFO" "${MYNAME}: restore: Started"
+log "INFO" "restore: Started"
 
 # Ensure the database user exists.
-log "INFO" "${MYNAME}: checking for DB user ${DB_USER}"
+log "INFO" "checking for DB user ${DB_USER}"
 result=$(psql --host=${DB_HOST} --username=${DB_ROOTUSER} --command='\du' | grep ${DB_USER})
 if [ -z "${result}" ]; then
     result=$(psql --host=${DB_HOST} --username=${DB_ROOTUSER} --command="create role ${DB_USER} with login password '${DB_USERPASSWORD}' inherit;")
     if [ "${result}" != "CREATE ROLE" ]; then
         error_message="Create role command failed: ${result}"
-        log "ERROR" "${MYNAME}: FATAL: ${error_message}"
+        log "ERROR" "FATAL: ${error_message}"
         error_to_sentry "${error_message}" "${DB_NAME}" "1"
         exit 1
     fi
 fi
 
 # Delete database if it exists.
-log "INFO" "${MYNAME}: checking for DB ${DB_NAME}"
+log "INFO" "checking for DB ${DB_NAME}"
 result=$(psql --host=${DB_HOST} --username=${DB_ROOTUSER} --list | grep ${DB_NAME})
 if [ -z "${result}" ]; then
-    log "INFO" "${MYNAME}: INFO: Database \"${DB_NAME}\" on host \"${DB_HOST}\" does not exist."
+    log "INFO" "INFO: Database \"${DB_NAME}\" on host \"${DB_HOST}\" does not exist."
 else
-    log "INFO" "${MYNAME}: finding current owner of DB ${DB_NAME}"
+    log "INFO" "finding current owner of DB ${DB_NAME}"
     db_owner=$(psql --host=${DB_HOST} --username=${DB_ROOTUSER} --command='\list' | grep ${DB_NAME} | cut -d '|' -f 2 | sed -e 's/ *//g')
-    log "INFO" "${MYNAME}: INFO: Database owner is ${db_owner}"
+    log "INFO" "INFO: Database owner is ${db_owner}"
 
-    log "INFO" "${MYNAME}: deleting database ${DB_NAME}"
+    log "INFO" "deleting database ${DB_NAME}"
     result=$(psql --host=${DB_HOST} --dbname=postgres --username=${db_owner} --command="DROP DATABASE ${DB_NAME};")
     if [ "${result}" != "DROP DATABASE" ]; then
         error_message="Drop database command failed: ${result}"
-        log "ERROR" "${MYNAME}: FATAL: ${error_message}"
+        log "ERROR" "FATAL: ${error_message}"
         error_to_sentry "${error_message}" "${DB_NAME}" "1"
         exit 1
     fi
 fi
 
 # Download the backup and checksum files
-log "INFO" "${MYNAME}: copying database ${DB_NAME} backup and checksum from ${S3_BUCKET}"
+log "INFO" "copying database ${DB_NAME} backup and checksum from ${S3_BUCKET}"
 start=$(date +%s)
 
 # maintain backward compatibility with key variables accepted by s3cmd
@@ -99,34 +99,34 @@ export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-$AWS_ACCESS_KEY}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-$AWS_SECRET_KEY}"
 
 # Download database backup
-aws s3 cp "${S3_BUCKET}/${DB_NAME}.sql.gz" "/tmp/${DB_NAME}.sql.gz" || STATUS=$?
+aws s3 cp --quiet "${S3_BUCKET}/${DB_NAME}.sql.gz" "/tmp/${DB_NAME}.sql.gz" || STATUS=$?
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Copy backup of ${DB_NAME} from ${S3_BUCKET} returned non-zero status ($STATUS) in $(expr $(date +%s) - ${start}) seconds."
+    error_message="FATAL: Copy backup of ${DB_NAME} from ${S3_BUCKET} returned non-zero status ($STATUS) in $(expr $(date +%s) - ${start}) seconds."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}"
     exit $STATUS
 fi
 
 # Download checksum file
-aws s3 cp "${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" "/tmp/${DB_NAME}.sql.sha256.gz" || STATUS=$?
+aws s3 cp --quiet "${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" "/tmp/${DB_NAME}.sql.sha256.gz" || STATUS=$?
 end=$(date +%s)
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Copy checksum of ${DB_NAME} from ${S3_BUCKET} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
+    error_message="FATAL: Copy checksum of ${DB_NAME} from ${S3_BUCKET} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}"
     exit $STATUS
 else
-    log "INFO" "${MYNAME}: Copy backup and checksum of ${DB_NAME} from ${S3_BUCKET} completed in $(expr ${end} - ${start}) seconds."
+    log "INFO" "Copy backup and checksum of ${DB_NAME} from ${S3_BUCKET} completed in $(expr ${end} - ${start}) seconds."
 fi
 
 # Decompress both files
-log "INFO" "${MYNAME}: decompressing backup and checksum of ${DB_NAME}"
+log "INFO" "decompressing backup and checksum of ${DB_NAME}"
 start=$(date +%s)
 
 # Decompress backup file
 gunzip -f /tmp/${DB_NAME}.sql.gz || STATUS=$?
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Decompressing backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr $(date +%s) - ${start}) seconds."
+    error_message="FATAL: Decompressing backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr $(date +%s) - ${start}) seconds."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}"
     exit $STATUS
@@ -136,61 +136,61 @@ fi
 gunzip -f /tmp/${DB_NAME}.sql.sha256.gz || STATUS=$?
 end=$(date +%s)
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Decompressing checksum of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
+    error_message="FATAL: Decompressing checksum of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}"
     exit $STATUS
 else
-    log "INFO" "${MYNAME}: Decompressing backup and checksum of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds."
+    log "INFO" "Decompressing backup and checksum of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds."
 fi
 
 # Validate the checksum
-log "INFO" "${MYNAME}: Validating backup integrity with checksum"
+log "INFO" "Validating backup integrity with checksum"
 cd /tmp || {
-    error_message="${MYNAME}: FATAL: Failed to change directory to /tmp"
+    error_message="FATAL: Failed to change directory to /tmp"
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "1"
     exit 1
 }
 
-sha256sum -c "${DB_NAME}.sql.sha256" || {
-    error_message="${MYNAME}: FATAL: Checksum validation failed for backup of ${DB_NAME}. The backup may be corrupted or tampered with."
+sha256sum --check --quiet "${DB_NAME}.sql.sha256" || {
+    error_message="FATAL: Checksum validation failed for backup of ${DB_NAME}. The backup may be corrupted or tampered with."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "1"
     exit 1
 }
-log "INFO" "${MYNAME}: Checksum validation successful - backup integrity confirmed"
+log "INFO" "Checksum validation successful - backup integrity confirmed"
 
 # Restore the database
-log "INFO" "${MYNAME}: restoring ${DB_NAME}"
+log "INFO" "restoring ${DB_NAME}"
 start=$(date +%s)
 psql --host=${DB_HOST} --username=${DB_ROOTUSER} --dbname=postgres ${DB_OPTIONS} < /tmp/${DB_NAME}.sql || STATUS=$?
 end=$(date +%s)
 
 if [ $STATUS -ne 0 ]; then
-    error_message="${MYNAME}: FATAL: Restore of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
+    error_message="FATAL: Restore of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}"
     exit $STATUS
 else
-    log "INFO" "${MYNAME}: Restore of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds."
+    log "INFO" "Restore of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds."
 fi
 
 # Verify database restore success
-log "INFO" "${MYNAME}: Verifying database restore success"
+log "INFO" "Verifying database restore success"
 result=$(psql --host=${DB_HOST} --username=${DB_ROOTUSER} --list | grep ${DB_NAME})
 if [ -z "${result}" ]; then
-    error_message="${MYNAME}: FATAL: Database ${DB_NAME} not found after restore attempt."
+    error_message="FATAL: Database ${DB_NAME} not found after restore attempt."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "1"
     exit 1
 else
-    log "INFO" "${MYNAME}: Database ${DB_NAME} successfully restored and verified."
+    log "INFO" "Database ${DB_NAME} successfully restored and verified."
 fi
 
 # Clean up temporary files
 rm -f "/tmp/${DB_NAME}.sql" "/tmp/${DB_NAME}.sql.sha256"
-log "INFO" "${MYNAME}: Temporary files cleaned up"
+log "INFO" "Temporary files cleaned up"
 
-log "INFO" "${MYNAME}: restore: Completed"
+log "INFO" "restore: Completed"
 exit $STATUS
