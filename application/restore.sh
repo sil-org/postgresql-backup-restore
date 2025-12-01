@@ -4,7 +4,7 @@
 log() {
     local level="$1"
     local message="$2"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${level}: ${MYNAME}: ${message}"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${MYNAME}: ${level}: ${message}"
 }
 
 filter_sensitive_values() {
