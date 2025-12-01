@@ -95,7 +95,7 @@ log "DEBUG" "Checksum file contents: $(cat "${DB_NAME}.sql.sha256")";
 
 # Validate checksum
 log "INFO" "Validating backup checksum";
-sha256sum --check --quiet "${DB_NAME}.sql.sha256" || {
+sha256sum -c -s "${DB_NAME}.sql.sha256" || {
     error_message="FATAL: Checksum validation failed for backup of ${DB_NAME}";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "1";

@@ -153,7 +153,7 @@ cd /tmp || {
     exit 1
 }
 
-sha256sum --check --quiet "${DB_NAME}.sql.sha256" || {
+sha256sum -c -s "${DB_NAME}.sql.sha256" || {
     error_message="FATAL: Checksum validation failed for backup of ${DB_NAME}. The backup may be corrupted or tampered with."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "1"
