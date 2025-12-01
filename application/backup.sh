@@ -4,7 +4,7 @@
 log() {
     local level="$1";
     local message="$2";
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${level}: ${MYNAME}: ${message}";
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${MYNAME}: ${level}: ${message}";
 }
 
 # Function to remove sensitive values from sentry Event
@@ -150,7 +150,7 @@ if [ "${B2_BUCKET}" != "" ]; then
     start=$(date +%s);
     AWS_ACCESS_KEY_ID="${B2_APPLICATION_KEY_ID}" \
     AWS_SECRET_ACCESS_KEY="${B2_APPLICATION_KEY}" \
-    aws s3 cp "/tmp/${DB_NAME}.sql.gz" "s3://${B2_BUCKET}/${DB_NAME}.sql.gz" \
+    aws s3 cp --quiet "/tmp/${DB_NAME}.sql.gz" "s3://${B2_BUCKET}/${DB_NAME}.sql.gz" \
       --endpoint-url "https://${B2_HOST}"
     STATUS=$?;
     end=$(date +%s);
