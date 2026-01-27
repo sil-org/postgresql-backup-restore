@@ -132,16 +132,27 @@ if [ "${B2_BUCKET}" != "" ]; then
     AWS_ACCESS_KEY_ID="${B2_APPLICATION_KEY_ID}" \
     AWS_SECRET_ACCESS_KEY="${B2_APPLICATION_KEY}" \
     aws s3 cp --quiet "/tmp/${DB_NAME}.sql.gz" "s3://${B2_BUCKET}/${DB_NAME}.sql.gz" \
-      --endpoint-url "https://${B2_HOST}"
-    STATUS=$?;
+      --endpoint-url "https://${B2_HOST}" || STATUS=$?;
+    if [ $STATUS -ne 0 ]; then
+        error_message="FATAL: Copy backup to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS).";
+        log "ERROR" "${error_message}";
+        error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
+        exit $STATUS;
+    fi
+
+    # Upload checksum file to B2
+    AWS_ACCESS_KEY_ID="${B2_APPLICATION_KEY_ID}" \
+    AWS_SECRET_ACCESS_KEY="${B2_APPLICATION_KEY}" \
+    aws s3 cp --quiet "/tmp/${DB_NAME}.sql.gz.sha256" "s3://${B2_BUCKET}/${DB_NAME}.sql.gz.sha256" \
+      --endpoint-url "https://${B2_HOST}" || STATUS=$?;
     end=$(date +%s);
     if [ $STATUS -ne 0 ]; then
-        error_message="FATAL: Copy backup to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
+        error_message="FATAL: Copy checksum to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS).";
         log "ERROR" "${error_message}";
         error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
         exit $STATUS;
     else
-        log "INFO" "Copy backup to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
+        log "INFO" "Copy backup and checksum to Backblaze B2 bucket ${B2_BUCKET} of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
     fi
 fi
 
