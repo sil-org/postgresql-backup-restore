@@ -60,7 +60,8 @@ log "INFO" "backup: Started";
 log "INFO" "Backing up ${DB_NAME}";
 
 start=$(date +%s);
-$(PGPASSWORD=${DB_USERPASSWORD} pg_dump --host=${DB_HOST} --username=${DB_USER} --create --clean ${DB_OPTIONS} --dbname=${DB_NAME} > /tmp/${DB_NAME}.sql) || STATUS=$?;
+# Pipe output directly to gzip for streaming compression
+PGPASSWORD=${DB_USERPASSWORD} pg_dump --host=${DB_HOST} --username=${DB_USER} --create --clean ${DB_OPTIONS} --dbname=${DB_NAME} | gzip > /tmp/${DB_NAME}.sql.gz || STATUS=${PIPESTATUS[0]};
 end=$(date +%s);
 
 # maintain backward compatibility with key variables accepted by s3cmd
@@ -73,7 +74,7 @@ if [ $STATUS -ne 0 ]; then
     error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
     exit $STATUS;
 else
-    log "INFO" "Backup of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds, ($(stat -c %s /tmp/${DB_NAME}.sql) bytes).";
+    log "INFO" "Backup of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds, ($(stat -c %s /tmp/${DB_NAME}.sql.gz) bytes compressed).";
 fi
 
 log "INFO" "Generating checksum for backup file"
@@ -84,44 +85,24 @@ cd /tmp || {
     exit 1;
 }
 
-# Create checksum file format
-sha256sum "${DB_NAME}.sql" > "${DB_NAME}.sql.sha256" || {
+# Create checksum file for compressed backup
+sha256sum "${DB_NAME}.sql.gz" > "${DB_NAME}.sql.gz.sha256" || {
     error_message="FATAL: Failed to generate checksum for backup of ${DB_NAME}";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "1";
     exit 1;
 }
-log "DEBUG" "Checksum file contents: $(cat "${DB_NAME}.sql.sha256")";
+log "DEBUG" "Checksum file contents: $(cat "${DB_NAME}.sql.gz.sha256")";
 
 # Validate checksum
 log "INFO" "Validating backup checksum";
-sha256sum -c -s "${DB_NAME}.sql.sha256" || {
+sha256sum -c -s "${DB_NAME}.sql.gz.sha256" || {
     error_message="FATAL: Checksum validation failed for backup of ${DB_NAME}";
     log "ERROR" "${error_message}";
     error_to_sentry "${error_message}" "${DB_NAME}" "1";
     exit 1;
 }
 log "INFO" "Checksum validation successful";
-
-# Compression
-start=$(date +%s);
-gzip -f /tmp/${DB_NAME}.sql || STATUS=$?;
-end=$(date +%s);
-
-if [ $STATUS -ne 0 ]; then
-    error_message="FATAL: Compressing backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds.";
-    log "ERROR" "${error_message}";
-    error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}";
-    exit $STATUS;
-else
-    log "INFO" "Compressing backup of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds.";
-fi
-
-# Compress checksum file
-gzip -f "${DB_NAME}.sql.sha256";
-if [ $? -ne 0 ]; then
-    log "WARN" "Failed to compress checksum file, but continuing backup process";
-fi
 
 # Upload compressed backup file to S3
 start=$(date +%s);
@@ -134,7 +115,7 @@ if [ $STATUS -ne 0 ]; then
 fi
 
 # Upload checksum file
-aws s3 cp --quiet "/tmp/${DB_NAME}.sql.sha256.gz" "${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" || STATUS=$?;
+aws s3 cp --quiet "/tmp/${DB_NAME}.sql.gz.sha256" "${S3_BUCKET}/${DB_NAME}.sql.gz.sha256" || STATUS=$?;
 end=$(date +%s);
 if [ $STATUS -ne 0 ]; then
     error_message="FATAL: Copy checksum to ${S3_BUCKET} of ${DB_NAME} returned non-zero status ($STATUS).";
@@ -165,7 +146,7 @@ if [ "${B2_BUCKET}" != "" ]; then
 fi
 
 # Clean up temporary files
-rm -f "/tmp/${DB_NAME}.sql.gz" "/tmp/${DB_NAME}.sql.sha256.gz";
+rm -f "/tmp/${DB_NAME}.sql.gz" "/tmp/${DB_NAME}.sql.gz.sha256";
 
 log "INFO" "backup: Completed";
 

@@ -108,7 +108,7 @@ if [ $STATUS -ne 0 ]; then
 fi
 
 # Download checksum file
-aws s3 cp --quiet "${S3_BUCKET}/${DB_NAME}.sql.sha256.gz" "/tmp/${DB_NAME}.sql.sha256.gz" || STATUS=$?
+aws s3 cp --quiet "${S3_BUCKET}/${DB_NAME}.sql.gz.sha256" "/tmp/${DB_NAME}.sql.gz.sha256" || STATUS=$?
 end=$(date +%s)
 if [ $STATUS -ne 0 ]; then
     error_message="FATAL: Copy checksum of ${DB_NAME} from ${S3_BUCKET} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
@@ -119,32 +119,7 @@ else
     log "INFO" "Copy backup and checksum of ${DB_NAME} from ${S3_BUCKET} completed in $(expr ${end} - ${start}) seconds."
 fi
 
-# Decompress both files
-log "INFO" "decompressing backup and checksum of ${DB_NAME}"
-start=$(date +%s)
-
-# Decompress backup file
-gunzip -f /tmp/${DB_NAME}.sql.gz || STATUS=$?
-if [ $STATUS -ne 0 ]; then
-    error_message="FATAL: Decompressing backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr $(date +%s) - ${start}) seconds."
-    log "ERROR" "${error_message}"
-    error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}"
-    exit $STATUS
-fi
-
-# Decompress checksum file
-gunzip -f /tmp/${DB_NAME}.sql.sha256.gz || STATUS=$?
-end=$(date +%s)
-if [ $STATUS -ne 0 ]; then
-    error_message="FATAL: Decompressing checksum of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
-    log "ERROR" "${error_message}"
-    error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}"
-    exit $STATUS
-else
-    log "INFO" "Decompressing backup and checksum of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds."
-fi
-
-# Validate the checksum
+# Validate the checksum of compressed backup before decompression
 log "INFO" "Validating backup integrity with checksum"
 cd /tmp || {
     error_message="FATAL: Failed to change directory to /tmp"
@@ -153,13 +128,27 @@ cd /tmp || {
     exit 1
 }
 
-sha256sum -c -s "${DB_NAME}.sql.sha256" || {
+sha256sum -c -s "${DB_NAME}.sql.gz.sha256" || {
     error_message="FATAL: Checksum validation failed for backup of ${DB_NAME}. The backup may be corrupted or tampered with."
     log "ERROR" "${error_message}"
     error_to_sentry "${error_message}" "${DB_NAME}" "1"
     exit 1
 }
 log "INFO" "Checksum validation successful - backup integrity confirmed"
+
+# Decompress backup file
+log "INFO" "decompressing backup of ${DB_NAME}"
+start=$(date +%s)
+gunzip -f /tmp/${DB_NAME}.sql.gz || STATUS=$?
+end=$(date +%s)
+if [ $STATUS -ne 0 ]; then
+    error_message="FATAL: Decompressing backup of ${DB_NAME} returned non-zero status ($STATUS) in $(expr ${end} - ${start}) seconds."
+    log "ERROR" "${error_message}"
+    error_to_sentry "${error_message}" "${DB_NAME}" "${STATUS}"
+    exit $STATUS
+else
+    log "INFO" "Decompressing backup of ${DB_NAME} completed in $(expr ${end} - ${start}) seconds."
+fi
 
 # Restore the database
 log "INFO" "restoring ${DB_NAME}"
@@ -189,7 +178,7 @@ else
 fi
 
 # Clean up temporary files
-rm -f "/tmp/${DB_NAME}.sql" "/tmp/${DB_NAME}.sql.sha256"
+rm -f "/tmp/${DB_NAME}.sql" "/tmp/${DB_NAME}.sql.gz.sha256"
 log "INFO" "Temporary files cleaned up"
 
 log "INFO" "restore: Completed"
