@@ -45,8 +45,9 @@ Service to backup and/or restore a PostgreSQL database to/from S3
 `B2_APPLICATION_KEY` (optional; required if `B2_BUCKET` is defined) Backblaze application key secret
 
 `B2_HOST`  (optional; required if `B2_BUCKET` is defined) Backblaze B2 bucket's `Endpoint`
-## Docker Hub
-This image is built automatically on Docker Hub as [silintl/postgresql-backup-restore](https://hub.docker.com/r/silintl/postgresql-backup-restore/)
+
+## Docker
+This image is built automatically to GitHub Packages (GHCR)
 
 ## Playing with it locally
 You'll need [Docker](https://www.docker.com/get-docker), [Docker Compose](https://docs.docker.com/compose/install/), and [Make](https://www.gnu.org/software/make/).
