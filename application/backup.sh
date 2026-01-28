@@ -11,24 +11,32 @@ if [[ ! -f "${SCRIPT_DIR}/lib/shared.sh" ]]; then
 fi
 source "${SCRIPT_DIR}/lib/shared.sh"
 
+# Enable pipefail so pipeline fails if ANY command fails
+set -o pipefail
+
 STATUS=0
 
 log "INFO" "backup: Started"
 log "INFO" "Backing up ${DB_NAME}"
 
 start=$(date +%s)
-# Pipe output directly to gzip for streaming compression
-PGPASSWORD="${DB_USERPASSWORD}" pg_dump --host="${DB_HOST}" --username="${DB_USER}" --create --clean ${DB_OPTIONS} --dbname="${DB_NAME}" | gzip > "/tmp/${DB_NAME}.sql.gz" || STATUS=${PIPESTATUS[0]}
+# Run the backup pipeline
+PGPASSWORD="${DB_USERPASSWORD}" pg_dump --host="${DB_HOST}" --username="${DB_USER}" --create --clean ${DB_OPTIONS} --dbname="${DB_NAME}" | gzip > "/tmp/${DB_NAME}.sql.gz"
+# Capture PIPESTATUS immediately (before any other command)
+PIPE_STATUS=("${PIPESTATUS[@]}")
 end=$(date +%s)
 
 # Setup AWS credentials with backward compatibility
 setup_aws_credentials
 
-if [[ $STATUS -ne 0 ]]; then
-    fatal_error "Backup of ${DB_NAME} returned non-zero status ($STATUS) in $((end - start)) seconds." "${DB_NAME}" "$STATUS"
-else
-    log "INFO" "Backup of ${DB_NAME} completed in $((end - start)) seconds, ($(stat -c %s "/tmp/${DB_NAME}.sql.gz") bytes compressed)."
+# Check overall pipeline status
+if [[ ${PIPE_STATUS[0]} -ne 0 ]]; then
+    fatal_error "pg_dump failed for ${DB_NAME} with status ${PIPE_STATUS[0]} in $((end - start)) seconds." "${DB_NAME}" "${PIPE_STATUS[0]}"
+elif [[ ${PIPE_STATUS[1]} -ne 0 ]]; then
+    fatal_error "gzip compression failed for ${DB_NAME} with status ${PIPE_STATUS[1]} in $((end - start)) seconds." "${DB_NAME}" "${PIPE_STATUS[1]}"
 fi
+
+log "INFO" "Backup of ${DB_NAME} completed in $((end - start)) seconds, ($(stat -c %s "/tmp/${DB_NAME}.sql.gz") bytes compressed)."
 
 log "INFO" "Generating checksum for backup file"
 cd /tmp || fatal_error "Failed to change directory to /tmp" "${DB_NAME}" 1
