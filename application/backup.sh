@@ -17,6 +17,7 @@ set -o pipefail
 STATUS=0
 
 log "INFO" "backup: Started"
+log "INFO" "version:  ${GITHUB_REF_NAME:-?} (${GITHUB_SHA:-?})";
 log "INFO" "Backing up ${DB_NAME}"
 
 start=$(date +%s)
