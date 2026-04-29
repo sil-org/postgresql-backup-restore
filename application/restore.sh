@@ -13,6 +13,7 @@ source "${SCRIPT_DIR}/lib/shared.sh"
 
 STATUS=0
 log "INFO" "restore: Started"
+log "INFO" "version:  ${GITHUB_REF_NAME:-?} (${GITHUB_SHA:-?})";
 
 # Ensure the database user exists.
 log "INFO" "checking for DB user ${DB_USER}"
