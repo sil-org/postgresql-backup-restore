@@ -22,6 +22,10 @@ RUN <<EOF
   adduser -D -u 1000 -G appgroup -h /home/appuser appuser
 EOF
 
+# AWS RDS CA bundle covering all regions, for verifying the DB server certificate.
+# Used only when PGSSLMODE=verify-full and PGSSLROOTCERT=/etc/ssl/rds-ca-bundle.pem are set.
+ADD --chmod=644 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/rds-ca-bundle.pem
+
 COPY --chown=appuser:appgroup application/ /data/
 WORKDIR /data
 
