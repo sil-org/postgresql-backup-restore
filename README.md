@@ -46,6 +46,15 @@ Service to backup and/or restore a PostgreSQL database to/from S3
 
 `B2_HOST`  (optional; required if `B2_BUCKET` is defined) Backblaze B2 bucket's `Endpoint`
 
+### Encryption in transit (optional)
+The image includes the [AWS RDS CA bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html) for all regions at `/etc/ssl/rds-ca-bundle.pem`. To require TLS and verify the database server's certificate, set these standard PostgreSQL environment variables:
+
+`PGSSLMODE` set to `verify-full`
+
+`PGSSLROOTCERT` set to `/etc/ssl/rds-ca-bundle.pem`
+
+If these are not set, the connection behaves as before (`sslmode=prefer`, no certificate verification).
+
 ## Docker
 This image is built automatically to GitHub Packages (GHCR)
 
